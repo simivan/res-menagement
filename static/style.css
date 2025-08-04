@@ -1,33 +1,90 @@
-/* Login stranica */
-.login-container {
-  max-width: 400px;
-  margin: 60px auto;
-  padding: 30px;
+/* style.css - osnovni izgled aplikacije */
+
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  background: #f4f4f4;
+  color: #333;
+}
+
+header {
+  background: #0b5394;
+  color: white;
+  padding: 1em;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+main {
+  padding: 2em;
+}
+
+h1, h2 {
+  margin-bottom: 0.5em;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1em;
   background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
 }
 
-.login-container input {
-  width: 100%;
-  padding: 10px;
-  margin-bottom: 15px;
+table th, table td {
+  padding: 0.75em;
   border: 1px solid #ccc;
-  border-radius: 4px;
+  text-align: left;
 }
 
-.login-container button {
-  width: 100%;
-  padding: 10px;
-  background: #1e88e5;
+table th {
+  background: #e0e0e0;
+}
+
+button {
+  padding: 0.5em 1em;
+  background: #0b5394;
   color: white;
   border: none;
-  font-weight: bold;
-  border-radius: 4px;
+  border-radius: 3px;
   cursor: pointer;
+}
+
+button:hover {
+  background: #073763;
+}
+
+form input, form select {
+  margin-bottom: 1em;
+  padding: 0.5em;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+form label {
+  font-weight: bold;
+  display: block;
+  margin-bottom: 0.25em;
+}
+
+.login-container {
+  max-width: 400px;
+  margin: 100px auto;
+  background: white;
+  padding: 2em;
+  border-radius: 5px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
 }
 
 .error-msg {
   color: red;
-  margin-bottom: 10px;
+  font-weight: bold;
+  margin-bottom: 1em;
+}
+
+.controls {
+  margin: 1em 0;
+  display: flex;
+  gap: 1em;
 }

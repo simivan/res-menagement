@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin panel - Kryobas Inventory</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <header>
+    <h1>Admin panel - Upravljanje Kryobas evidencijom</h1>
+    <button id="logout-btn">Odjavi se</button>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="equipment-tab">Oprema</button>
+    <button class="tab-btn" data-tab="users-tab">Korisnici</button>
+  </nav>
+
+  <main>
+    <!-- Oprema -->
+    <section id="equipment-tab" class="tab-content active">
+      <h2>Dodaj novu opremu</h2>
+      <form id="add-equipment-form" autocomplete="off">
+        <input type="text" name="name" placeholder="Naziv opreme" required />
+        <input type="text" name="serial_number" placeholder="Serijski broj" required />
+        <input type="text" name="location" placeholder="Lokacija" required />
+        <select name="status" required>
+          <option value="aktivna">Aktivna</option>
+          <option value="na_skladistu">Na skladištu</option>
+          <option value="za_otpis">Za otpis</option>
+          <option value="otpisana">Otpisana</option>
+        </select>
+        <select name="user_id">
+          <option value="">Bez korisnika</option>
+        </select>
+        <button type="submit">Dodaj opremu</button>
+      </form>
+
+      <h2>Pretraga opreme</h2>
+      <input type="text" id="search-equipment" placeholder="Pretraži opremu po nazivu, serijskom broju, lokaciji ili korisniku..." />
+
+      <table id="equipment-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Naziv</th>
+            <th>Serijski broj</th>
+            <th>Lokacija</th>
+            <th>Status</th>
+            <th>Korisnik</th>
+            <th>Akcije</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- Korisnici -->
+    <section id="users-tab" class="tab-content">
+      <h2>Dodaj novog korisnika</h2>
+      <form id="add-user-form" autocomplete="off">
+        <input type="text" name="username" placeholder="Korisničko ime" required />
+        <input type="password" name="password" placeholder="Lozinka" required />
+        <select name="role" required>
+          <option value="user">Korisnik</option>
+          <option value="admin">Administrator</option>
+        </select>
+        <button type="submit">Dodaj korisnika</button>
+      </form>
+
+      <h2>Lista korisnika</h2>
+      <table id="users-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Korisničko ime</th>
+            <th>Uloga</th>
+            <th>Akcije</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <div id="print-modal" class="modal hidden" tabindex="-1">
+    <div class="modal-content">
+      <button class="close-btn" id="close-print-modal">&times;</button>
+      <h3>Kartica korisnika</h3>
+      <div id="print-content"></div>
+      <button id="print-btn">Štampaj</button>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='main.js') }}"></script>
+  <script>
+    const tabs = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        tabContents.forEach(tc => tc.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.tab).classList.add('active');
+      });
+    });
+
+    document.getElementById('logout-btn').onclick = () => {
+      fetch('/logout', {method: 'POST'})
+        .then(() => window.location.href = '/login')
+        .catch(() => window.location.href = '/login');
+    };
+  </script>
+</body>
+</html>

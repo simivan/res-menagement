@@ -19,8 +19,17 @@
       <label for="password">Lozinka:</label>
       <input type="password" id="password" name="password" required />
 
+      <label><input type="checkbox" onclick="togglePassword()" /> Prikaži lozinku</label>
+
       <button type="submit">Prijavi se</button>
     </form>
   </div>
+
+  <script>
+    function togglePassword() {
+      const pw = document.getElementById("password");
+      pw.type = pw.type === "password" ? "text" : "password";
+    }
+  </script>
 </body>
 </html>

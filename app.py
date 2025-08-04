@@ -1,190 +1,167 @@
-import os
-import sqlite3
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify
-from werkzeug.security import generate_password_hash, check_password_hash
-from dotenv import load_dotenv
-from functools import wraps
+# app.py (refaktorisan za SQLite + Flask + SQLAlchemy)
 
-load_dotenv()
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
+from functools import wraps
+import os
 
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "tajna_lozinka")
+app.secret_key = os.getenv("SECRET_KEY", "tajna123")
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///resource.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-DATABASE = "resource.db"
+db = SQLAlchemy(app)
 
-# --------------------- DB KONFIGURACIJA --------------------- #
-def get_db_connection():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    return conn
+# MODELI
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password = db.Column(db.String(200), nullable=False)
+    role = db.Column(db.String(10), nullable=False)
+    equipment = db.relationship('Equipment', backref='owner', lazy=True)
 
-def init_db():
-    conn = get_db_connection()
-    c = conn.cursor()
-    # Tabela korisnika
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            role TEXT NOT NULL
-        )
-    """)
-    # Tabela opreme
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS equipment (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            serial_number TEXT NOT NULL,
-            location TEXT NOT NULL,
-            status TEXT NOT NULL,
-            user_id INTEGER,
-            FOREIGN KEY(user_id) REFERENCES users(id)
-        )
-    """)
-    conn.commit()
-    conn.close()
+class Equipment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    serial_number = db.Column(db.String(100), unique=True, nullable=False)
+    location = db.Column(db.String(100), nullable=False)
+    status = db.Column(db.String(30), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
 
-def create_default_admin():
-    conn = get_db_connection()
-    c = conn.cursor()
-    username = os.getenv("ADMIN_USERNAME", "admin")
-    password = os.getenv("ADMIN_PASSWORD", "admin")
-    hashed_pw = generate_password_hash(password)
-    c.execute("SELECT * FROM users WHERE username = ?", (username,))
-    if not c.fetchone():
-        c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)", (username, hashed_pw, "admin"))
-    conn.commit()
-    conn.close()
+# DEKORATORI
 
-# --------------------- DEKORATORI --------------------- #
 def login_required(f):
     @wraps(f)
-    def wrap(*args, **kwargs):
-        if "user_id" in session:
-            return f(*args, **kwargs)
-        return redirect(url_for("login"))
-    return wrap
+    def decorated(*args, **kwargs):
+        if "username" not in session:
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated
 
 def admin_required(f):
     @wraps(f)
-    def wrap(*args, **kwargs):
-        if session.get("role") == "admin":
-            return f(*args, **kwargs)
-        return jsonify({"error": "Unauthorized"}), 403
-    return wrap
-
-# --------------------- RUTE --------------------- #
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
-        conn = get_db_connection()
-        user = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
-        conn.close()
-        if user and check_password_hash(user["password"], password):
-            session["user_id"] = user["id"]
-            session["username"] = user["username"]
-            session["role"] = user["role"]
+    def decorated(*args, **kwargs):
+        if session.get("role") != "admin":
             return redirect(url_for("index"))
-        return render_template("login.html", error="Neispravni kredencijali")
-    return render_template("login.html")
+        return f(*args, **kwargs)
+    return decorated
 
-@app.route("/logout", methods=["GET", "POST"])
-def logout():
-    session.clear()
-    return redirect(url_for("login"))
-
+# RUTE
 @app.route("/")
 @login_required
 def index():
     return render_template("index.html", username=session["username"], role=session["role"])
 
-@app.route("/admin")
-@login_required
-@admin_required
-def admin_panel():
-    return render_template("admin.html")
-
-# --------------------- API: OPREMA --------------------- #
-@app.route("/api/equipment", methods=["GET", "POST"])
-@login_required
-def equipment_api():
-    conn = get_db_connection()
+@app.route("/login", methods=["GET", "POST"])
+def login():
     if request.method == "POST":
-        data = request.get_json()
-        conn.execute("""
-            INSERT INTO equipment (name, serial_number, location, status, user_id)
-            VALUES (?, ?, ?, ?, ?)
-        """, (data["name"], data["serial_number"], data["location"], data["status"], data.get("user_id")))
-        conn.commit()
-        conn.close()
-        return jsonify({"message": "Oprema dodata"}), 201
-    else:
-        result = conn.execute("""
-            SELECT e.*, u.username as user_name
-            FROM equipment e LEFT JOIN users u ON e.user_id = u.id
-        """).fetchall()
-        conn.close()
-        return jsonify([dict(row) for row in result])
+        user = User.query.filter_by(username=request.form["username"]).first()
+        if user and check_password_hash(user.password, request.form["password"]):
+            session["username"] = user.username
+            session["role"] = user.role
+            return redirect(url_for("index"))
+        return render_template("login.html", error="Pogrešni podaci")
+    return render_template("login.html")
+
+@app.route("/logout", methods=["POST"])
+@login_required
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+# API ENDPOINTI
+@app.route("/api/equipment", methods=["GET"])
+@login_required
+def get_equipment():
+    eq = Equipment.query.all()
+    return jsonify([{
+        "id": e.id,
+        "name": e.name,
+        "serial_number": e.serial_number,
+        "location": e.location,
+        "status": e.status,
+        "user": e.owner.username if e.owner else None
+    } for e in eq])
+
+@app.route("/api/equipment", methods=["POST"])
+@admin_required
+def add_equipment():
+    data = request.get_json()
+    if Equipment.query.filter_by(serial_number=data["serial_number"]).first():
+        return jsonify({"error": "Duplikat serijskog broja"}), 400
+    user = User.query.get(data["user_id"]) if data.get("user_id") else None
+    new_eq = Equipment(
+        name=data["name"],
+        serial_number=data["serial_number"],
+        location=data["location"],
+        status=data["status"],
+        owner=user
+    )
+    db.session.add(new_eq)
+    db.session.commit()
+    return jsonify({"message": "Oprema dodata"})
+
+@app.route("/api/equipment/<int:id>", methods=["PUT"])
+@admin_required
+def update_equipment(id):
+    data = request.get_json()
+    eq = Equipment.query.get_or_404(id)
+    eq.name = data["name"]
+    eq.serial_number = data["serial_number"]
+    eq.location = data["location"]
+    eq.status = data["status"]
+    eq.user_id = data.get("user_id")
+    db.session.commit()
+    return jsonify({"message": "Oprema izmenjena"})
 
 @app.route("/api/equipment/<int:id>", methods=["DELETE"])
-@login_required
-def delete_equipment(id):
-    conn = get_db_connection()
-    conn.execute("DELETE FROM equipment WHERE id = ?", (id,))
-    conn.commit()
-    conn.close()
-    return "", 204
-
-# --------------------- API: KORISNICI --------------------- #
-@app.route("/api/users", methods=["GET", "POST"])
-@login_required
 @admin_required
-def users_api():
-    conn = get_db_connection()
-    if request.method == "POST":
-        data = request.get_json()
-        hashed_pw = generate_password_hash(data["password"])
-        conn.execute("""
-            INSERT INTO users (username, password, role)
-            VALUES (?, ?, ?)
-        """, (data["username"], hashed_pw, data["role"]))
-        conn.commit()
-        conn.close()
-        return jsonify({"message": "Korisnik dodat"}), 201
-    else:
-        result = conn.execute("SELECT id, username, role FROM users").fetchall()
-        conn.close()
-        return jsonify([dict(row) for row in result])
+def delete_equipment(id):
+    eq = Equipment.query.get_or_404(id)
+    db.session.delete(eq)
+    db.session.commit()
+    return jsonify({"message": "Oprema obrisana"})
+
+@app.route("/api/users", methods=["GET"])
+@admin_required
+def list_users():
+    users = User.query.all()
+    return jsonify([{"id": u.id, "username": u.username, "role": u.role} for u in users])
+
+@app.route("/api/users", methods=["POST"])
+@admin_required
+def create_user():
+    data = request.get_json()
+    if User.query.filter_by(username=data["username"]).first():
+        return jsonify({"error": "Korisničko ime već postoji"}), 400
+    new_user = User(
+        username=data["username"],
+        password=generate_password_hash(data["password"]),
+        role=data["role"]
+    )
+    db.session.add(new_user)
+    db.session.commit()
+    return jsonify({"message": "Korisnik dodat"})
 
 @app.route("/api/users/<int:id>", methods=["DELETE"])
-@login_required
 @admin_required
 def delete_user(id):
-    conn = get_db_connection()
-    conn.execute("DELETE FROM users WHERE id = ?", (id,))
-    conn.commit()
-    conn.close()
-    return "", 204
+    user = User.query.get_or_404(id)
+    db.session.delete(user)
+    db.session.commit()
+    return jsonify({"message": "Korisnik obrisan"})
 
-# --------------------- API: Dummy podaci --------------------- #
-@app.route("/api/init", methods=["POST"])
+@app.route("/api/users/<int:id>", methods=["PUT"])
 @admin_required
-def init_dummy_data():
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("INSERT INTO equipment (name, serial_number, location, status) VALUES (?, ?, ?, ?)",
-              ("Laptop Dell", "123456", "Beograd", "aktivna"))
-    c.execute("INSERT INTO equipment (name, serial_number, location, status) VALUES (?, ?, ?, ?)",
-              ("Printer HP", "789123", "Novi Sad", "na_skladistu"))
-    conn.commit()
-    conn.close()
-    return jsonify({"message": "Test podaci ubačeni"})
+def update_user(id):
+    data = request.get_json()
+    user = User.query.get_or_404(id)
+    user.role = data["role"]
+    db.session.commit()
+    return jsonify({"message": "Uloga izmenjena"})
 
-# --------------------- MAIN --------------------- #
 if __name__ == "__main__":
-    init_db()
-    create_default_admin()
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True)
